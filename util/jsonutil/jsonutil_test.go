@@ -1,6 +1,7 @@
 package jsonutil
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
@@ -184,6 +185,34 @@ func TestDropNestedStructureDoesntExist(t *testing.T) {
 	output := []byte(`{"consented_providers":{"providers":[1608,765,492]},"test":{"nested":true}},"data": [{"test":5},{"test": [1,2,3]}]}`)
 
 	res, err := DropElement(input, "consented_providers", "test2")
+
+	assert.NoError(t, err, "Error should be nil")
+	assert.Equal(t, output, res, "Result is incorrect")
+}
+
+func TestSetElement(t *testing.T) {
+	input := []byte(`{"consented_providers":{"providers":[1608,765,492], "nested":{"data": 123}}}`)
+	setValue := []byte(`"test":{"nested":true}`)
+	output := []byte(`{"consented_providers":{"providers":[1608,765,492], "nested":{"data": 123,"test":{"nested":true}}}}`)
+
+	res, err := SetElement(input, setValue, "consented_providers", "nested")
+
+	fmt.Println(string(output))
+	fmt.Println(string(res))
+
+	assert.NoError(t, err, "Error should be nil")
+	assert.Equal(t, output, res, "Result is incorrect")
+}
+
+func TestSetElementNestedExists(t *testing.T) {
+	input := []byte(`{"data":{"sitedata": "mysitedata"}}`)
+	setValue := []byte(`{"somefpd": "fpdDataTest"}`)
+	output := []byte(`{"data":{"sitedata": "mysitedata", "somefpd": "fpdDataTest}}`)
+
+	res, err := SetElement(input, setValue, "data")
+
+	fmt.Println(string(output))
+	fmt.Println(string(res))
 
 	assert.NoError(t, err, "Error should be nil")
 	assert.Equal(t, output, res, "Result is incorrect")

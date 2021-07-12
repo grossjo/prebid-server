@@ -41,7 +41,14 @@ import (
 	"golang.org/x/text/currency"
 )
 
-const storedRequestTimeoutMillis = 50
+const (
+	storedRequestTimeoutMillis = 50
+
+	site = "site"
+	app  = "app"
+	user = "user"
+	data = "data"
+)
 
 var (
 	dntKey      string = http.CanonicalHeaderKey("DNT")
@@ -136,7 +143,7 @@ func (deps *endpointDeps) Auction(w http.ResponseWriter, r *http.Request, _ http
 		deps.analytics.LogAuctionObject(&ao)
 	}()
 
-	req, errL := deps.parseRequest(r)
+	req, fpData, errL := deps.parseRequest(r)
 
 	if errortypes.ContainsFatalError(errL) && writeError(errL, w, &labels) {
 		return
@@ -186,6 +193,7 @@ func (deps *endpointDeps) Auction(w http.ResponseWriter, r *http.Request, _ http
 		LegacyLabels:               labels,
 		Warnings:                   warnings,
 		GlobalPrivacyControlHeader: secGPC,
+		FirstPartyData:             fpData,
 	}
 
 	response, err := deps.ex.HoldAuction(ctx, auctionRequest, nil)
@@ -228,7 +236,7 @@ func (deps *endpointDeps) Auction(w http.ResponseWriter, r *http.Request, _ http
 // possible, it will return errors with messages that suggest improvements.
 //
 // If the errors list has at least one element, then no guarantees are made about the returned request.
-func (deps *endpointDeps) parseRequest(httpRequest *http.Request) (req *openrtb2.BidRequest, errs []error) {
+func (deps *endpointDeps) parseRequest(httpRequest *http.Request) (req *openrtb2.BidRequest, fpData map[string][]byte, errs []error) {
 	req = &openrtb2.BidRequest{}
 	errs = nil
 
@@ -260,7 +268,7 @@ func (deps *endpointDeps) parseRequest(httpRequest *http.Request) (req *openrtb2
 	}
 
 	//If {site,app,user}.data exists, merge it into {site,app,user}.ext.data and remove {site,app,user}.data
-	requestJson, err = moveFPDData(requestJson)
+	requestJson, fpData, err = getFPDData(requestJson)
 	if err != nil {
 		errs = []error{err}
 		return
@@ -289,45 +297,58 @@ func (deps *endpointDeps) parseRequest(httpRequest *http.Request) (req *openrtb2
 	return
 }
 
-func moveFPDData(request []byte) ([]byte, error) {
+func getFPDData(request []byte) ([]byte, map[string][]byte, error) {
 	//If {site,app,user}.data exists, merge it into {site,app,user}.ext.data and remove {site,app,user}.data
-	siteData, _, _, err := jsonparser.Get(request, "site", "data")
+	siteData, _, _, err := jsonparser.Get(request, site, data)
 	if err != nil && err != jsonparser.KeyPathNotFoundError {
-		return request, err
+		return request, nil, err
 	}
-	appData, _, _, err := jsonparser.Get(request, "app", "data")
+	appData, _, _, err := jsonparser.Get(request, app, data)
 	if err != nil && err != jsonparser.KeyPathNotFoundError {
-		return request, err
-	}
-
-	userData, _, _, err := jsonparser.Get(request, "user", "data")
-	if err != nil && err != jsonparser.KeyPathNotFoundError {
-		return request, err
+		return request, nil, err
 	}
 
+	userData, _, _, err := jsonparser.Get(request, user, data)
+	if err != nil && err != jsonparser.KeyPathNotFoundError {
+		return request, nil, err
+	}
+
+	fpdReqData := make(map[string][]byte, 0)
 	if siteData != nil {
-		request, err = jsonutil.DropElement(request, "site", "data") // modify to nested objects
+
+		siteDataCopy := make([]byte, len(siteData))
+		copy(siteDataCopy, siteData)
+		fpdReqData[site] = siteDataCopy
+
+		request, err = jsonutil.DropElement(request, site, data)
 		if err != nil {
-			return request, err
+			return request, nil, err
 		}
-		//TODO: merge siteData to into {site,app,user}.ext.data  //!! write func to set nested object
 	}
 	if appData != nil {
-		request, err = jsonutil.DropElement(request, "app", "data")
+
+		appDataCopy := make([]byte, len(appData))
+		copy(appDataCopy, appData)
+		fpdReqData[app] = appData
+
+		request, err = jsonutil.DropElement(request, app, data)
 		if err != nil {
-			return request, err
+			return request, nil, err
 		}
-		//TODO: merge appData to into {site,app,user}.ext.data
 	}
 	if userData != nil {
-		request, err = jsonutil.DropElement(request, "user", "data")
-		if err != nil {
-			return request, err
-		}
-		//TODO: merge userData to into {site,app,user}.ext.data
-	}
-	return request, nil
 
+		userDataCopy := make([]byte, len(userData))
+		copy(userDataCopy, userData)
+		fpdReqData[user] = userDataCopy
+
+		request, err = jsonutil.DropElement(request, user, data)
+		if err != nil {
+			return request, nil, err
+		}
+	}
+
+	return request, fpdReqData, nil
 }
 
 // parseTimeout returns parses tmax from the requestJson, or returns the default if it doesn't exist.

@@ -149,7 +149,8 @@ type AuctionRequest struct {
 
 	// LegacyLabels is included here for temporary compatability with cleanOpenRTBRequests
 	// in HoldAuction until we get to factoring it away. Do not use for anything new.
-	LegacyLabels metrics.Labels
+	LegacyLabels   metrics.Labels
+	FirstPartyData map[string][]byte
 }
 
 // BidderRequest holds the bidder specific request and all other
@@ -214,7 +215,7 @@ func (e *exchange) HoldAuction(ctx context.Context, r AuctionRequest, debugLog *
 	// Get currency rates conversions for the auction
 	conversions := e.getAuctionCurrencyRates(requestExt.Prebid.CurrencyConversions)
 
-	adapterBids, adapterExtra, anyBidsReturned := e.getAllBids(auctionCtx, bidderRequests, bidAdjustmentFactors, conversions, r.Account.DebugAllow, r.GlobalPrivacyControlHeader, debugLog.DebugOverride, fpdData)
+	adapterBids, adapterExtra, anyBidsReturned := e.getAllBids(auctionCtx, bidderRequests, bidAdjustmentFactors, conversions, r.Account.DebugAllow, r.GlobalPrivacyControlHeader, debugLog.DebugOverride, fpdData, r.FirstPartyData)
 
 	var auc *auction
 	var cacheErrs []error
@@ -458,7 +459,8 @@ func (e *exchange) getAllBids(
 	accountDebugAllowed bool,
 	globalPrivacyControlHeader string,
 	headerDebugAllowed bool,
-	fpdData map[openrtb_ext.BidderName]*openrtb_ext.FPDData) (
+	fpdData map[openrtb_ext.BidderName]*openrtb_ext.FPDData,
+	firstPartyData map[string][]byte) (
 	map[openrtb_ext.BidderName]*pbsOrtbSeatBid,
 	map[openrtb_ext.BidderName]*seatResponseExtra, bool) {
 	// Set up pointers to the bid results
@@ -485,7 +487,7 @@ func (e *exchange) getAllBids(
 			if fpdData != nil && fpdData[bidderRequest.BidderName] != nil {
 				//FPD needs to be applied. Bid request may be modified.
 				//To save original bid request new copy will be returned
-				bidderRequest.BidRequest = applyFPD(bidderRequest.BidRequest, fpdData[bidderRequest.BidderName])
+				bidderRequest.BidRequest = applyFPD(bidderRequest.BidRequest, fpdData[bidderRequest.BidderName], firstPartyData)
 			}
 
 			start := time.Now()
@@ -548,14 +550,14 @@ func (e *exchange) getAllBids(
 	return adapterBids, adapterExtra, bidsFound
 }
 
-func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData) *openrtb2.BidRequest {
+func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData, firstPartyData map[string][]byte) *openrtb2.BidRequest {
 	newBidRequest := &bidRequest
 
 	if fpdData.User != nil {
 		if bidRequest.User == nil {
 			(*newBidRequest).User = fpdData.User
 		} else {
-			(*newBidRequest).User = mergeUser(*bidRequest.User, fpdData.User)
+			(*newBidRequest).User = mergeUser(*bidRequest.User, fpdData.User, firstPartyData["user"])
 		}
 	}
 
@@ -563,7 +565,7 @@ func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData) *op
 		if bidRequest.App == nil {
 			(*newBidRequest).App = fpdData.App
 		} else {
-			(*newBidRequest).App = mergeApp(*bidRequest.App, fpdData.App)
+			(*newBidRequest).App = mergeApp(*bidRequest.App, fpdData.App, firstPartyData["app"])
 		}
 	}
 
@@ -571,14 +573,14 @@ func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData) *op
 		if bidRequest.Site == nil {
 			(*newBidRequest).Site = fpdData.Site
 		} else {
-			(*newBidRequest).Site = mergeSite(*bidRequest.Site, fpdData.Site)
+			(*newBidRequest).Site = mergeSite(*bidRequest.Site, fpdData.Site, firstPartyData["site"])
 		}
 	}
 
 	return *newBidRequest
 }
 
-func mergeUser(user openrtb2.User, fpdUser *openrtb2.User) *openrtb2.User {
+func mergeUser(user openrtb2.User, fpdUser *openrtb2.User, userData []byte) *openrtb2.User {
 	temp := user
 	newUser := temp
 
@@ -609,10 +611,20 @@ func mergeUser(user openrtb2.User, fpdUser *openrtb2.User) *openrtb2.User {
 	if fpdUser.Ext != nil {
 		newUser.Ext = fpdUser.Ext
 	}
+
+	//If {site,app,user}.data exists, merge it into {site,app,user}.ext.data
+	//Question: if fpdSite.Ext.data exists should it be overwritten with Site.data?
+	if userData != nil {
+		newUserExt, err := jsonutil.SetElement(newUser.Ext, userData, "data")
+		if err != nil {
+			newUser.Ext = newUserExt
+		}
+	}
+
 	return &newUser
 }
 
-func mergeApp(app openrtb2.App, fpdApp *openrtb2.App) *openrtb2.App {
+func mergeApp(app openrtb2.App, fpdApp *openrtb2.App, appData []byte) *openrtb2.App {
 	temp := app
 	newApp := temp
 
@@ -659,11 +671,19 @@ func mergeApp(app openrtb2.App, fpdApp *openrtb2.App) *openrtb2.App {
 	if fpdApp.Ext != nil {
 		newApp.Ext = fpdApp.Ext
 	}
+	//If {site,app,user}.data exists, merge it into {site,app,user}.ext.data
+	//Question: if fpdApp.Ext.data exists should it be overwritten with App.data?
+	if appData != nil {
+		newAppExt, err := jsonutil.SetElement(newApp.Ext, appData, "data")
+		if err != nil {
+			newApp.Ext = newAppExt
+		}
+	}
 
 	return &newApp
 }
 
-func mergeSite(site openrtb2.Site, fpdSite *openrtb2.Site) *openrtb2.Site {
+func mergeSite(site openrtb2.Site, fpdSite *openrtb2.Site, siteData []byte) *openrtb2.Site {
 	temp := site
 	newSite := temp
 
@@ -709,6 +729,17 @@ func mergeSite(site openrtb2.Site, fpdSite *openrtb2.Site) *openrtb2.Site {
 	if fpdSite.Ext != nil {
 		newSite.Ext = fpdSite.Ext
 	}
+
+	//If {site,app,user}.data exists, merge it into {site,app,user}.ext.data
+	//Question: if fpdSite.Ext.data exists should it be overwritten with Site.data (now it's merged)?
+	if siteData != nil {
+		newSiteExt, err := jsonutil.SetElement(newSite.Ext, siteData, "data")
+		if err == nil {
+			newSite.Ext = newSiteExt
+			fmt.Println(string(newSite.Ext))
+		}
+	}
+
 	return &newSite
 }
 
