@@ -62,10 +62,6 @@ type FPDData struct {
 	User *openrtb2.User `json:"user,omitempty"`
 }
 
-type FPDExtData struct {
-	Data json.RawMessage `json:"data,omitempty"`
-}
-
 type ExtRequestCurrency struct {
 	ConversionRates map[string]map[string]float64 `json:"rates"`
 	UsePBSRates     *bool                         `json:"usepbsrates"`

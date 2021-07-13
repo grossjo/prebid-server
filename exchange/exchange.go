@@ -557,6 +557,11 @@ func (e *exchange) getAllBids(
 func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData, firstPartyData map[string][]byte, errL []error) *openrtb2.BidRequest {
 	newBidRequest := &bidRequest
 
+	// TODO: If an attribute doesn't pass defined validation checks,
+	// it should be removed from the request with a warning placed
+	// in the messages section of debug output and a log message emitted 1% of the time.
+	// The auction should continue
+
 	if fpdData.User != nil {
 		if bidRequest.User == nil {
 			(*newBidRequest).User = fpdData.User
