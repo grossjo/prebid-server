@@ -487,7 +487,11 @@ func (e *exchange) getAllBids(
 			if fpdData != nil && fpdData[bidderRequest.BidderName] != nil {
 				//FPD needs to be applied. Bid request may be modified.
 				//To save original bid request new copy will be returned
-				bidderRequest.BidRequest = applyFPD(bidderRequest.BidRequest, fpdData[bidderRequest.BidderName], firstPartyData)
+				errs := make([]error, 0)
+				bidderRequest.BidRequest = applyFPD(bidderRequest.BidRequest, fpdData[bidderRequest.BidderName], firstPartyData, errs)
+				if len(errs) != 0 {
+					//skip?
+				}
 			}
 
 			start := time.Now()
@@ -550,7 +554,7 @@ func (e *exchange) getAllBids(
 	return adapterBids, adapterExtra, bidsFound
 }
 
-func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData, firstPartyData map[string][]byte) *openrtb2.BidRequest {
+func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData, firstPartyData map[string][]byte, errL []error) *openrtb2.BidRequest {
 	newBidRequest := &bidRequest
 
 	if fpdData.User != nil {
@@ -576,6 +580,22 @@ func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData, fir
 			(*newBidRequest).Site = mergeSite(*bidRequest.Site, fpdData.Site, firstPartyData["site"])
 		}
 	}
+
+	if ((*newBidRequest).Site == nil && (*newBidRequest).App == nil) || ((*newBidRequest).Site != nil && (*newBidRequest).App != nil) {
+		errL = append(errL, errors.New("request.site or request.app must be defined, but not both."))
+	}
+
+	/*if err := deps.validateSite(req.Site); err != nil {
+		errL = append(errL, err)
+	}
+
+	if err := deps.validateApp(req.App); err != nil {
+		errL = append(errL, err)
+	}
+
+	if err := deps.validateUser(req.User, aliases); err != nil {
+		errL = append(errL, err)
+	}*/
 
 	return *newBidRequest
 }
@@ -731,12 +751,14 @@ func mergeSite(site openrtb2.Site, fpdSite *openrtb2.Site, siteData []byte) *ope
 	}
 
 	//If {site,app,user}.data exists, merge it into {site,app,user}.ext.data
-	//Question: if fpdSite.Ext.data exists should it be overwritten with Site.data (now it's merged)?
+	//Question: if fpdSite.Ext.data exists should it be overwritten with Site.data?
 	if siteData != nil {
-		newSiteExt, err := jsonutil.SetElement(newSite.Ext, siteData, "data")
+		//what function to call: SetElement or SetElement2
+		//newSiteExt, err := jsonutil.SetElement(newSite.Ext, siteData, "data")
+		newSiteExt, err := jsonutil.SetElement2(newSite.Ext, siteData, "data")
+
 		if err == nil {
 			newSite.Ext = newSiteExt
-			fmt.Println(string(newSite.Ext))
 		}
 	}
 

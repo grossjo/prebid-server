@@ -135,7 +135,7 @@ func SetElement(data []byte, setValue []byte, keys ...string) ([]byte, error) {
 	if len(setValue) <= 2 { //empty object to set
 		return data, nil
 	}
-	if len(data) <= 2 {
+	if len(data) <= 2 { //data is empty
 		return buildNewObject(keys[len(keys)-1], setValue), nil
 	}
 
@@ -188,4 +188,33 @@ func buildNewObject(key string, setValue []byte) []byte {
 	result = append(result, colon)
 	result = append(result, setValue...)
 	return result
+}
+
+func SetElement2(originDataInput []byte, setValue []byte, key string) ([]byte, error) {
+
+	originData := make(map[string]interface{})
+	setValueData := make(map[string]interface{})
+
+	err := json.Unmarshal(originDataInput, &originData)
+	if err != nil {
+		return originDataInput, err
+	}
+	err = json.Unmarshal(setValue, &setValueData)
+	if err != nil {
+		return originDataInput, err
+	}
+
+	if val, ok := originData[key]; ok {
+		//element exists already - add new element(s) to it
+		data := val.(map[string]interface{})
+		for k, v := range setValueData {
+			data[k] = v
+		}
+		originData[key] = data
+	} else {
+		//element doesn't exist - set value as is
+		originData[key] = setValueData
+	}
+	res, err := json.Marshal(originData)
+	return res, err
 }
