@@ -3384,12 +3384,38 @@ var testStoredImpIds = []string{
 
 var testStoredImps = []string{
 	`{
-		"w":200,
-		"h":300
+		"id": "adUnit1",
+        "ext": {
+        	"appnexus": {
+        		"placementId": "abc",
+        		"position": "above",
+        		"reserve": 0.35
+        	},
+        	"rubicon": {
+        		"accountId": "abc"
+        	}
+        },
+		"video":{
+        	"w":200,
+        	"h":300
+		}
 	}`,
 	`{
-		"w":200,
-		"h":300
+		"id": "adUnit1",
+        "ext": {
+        	"appnexus": {
+        		"placementId": "abc",
+        		"position": "above",
+        		"reserve": 0.35
+        	},
+        	"rubicon": {
+        		"accountId": "abc"
+        	}
+        },
+		"video":{
+        	"w":200,
+        	"h":300
+		}
 	}`,
 	``,
 	``,
