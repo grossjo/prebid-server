@@ -2763,12 +2763,94 @@ func TestGetFPDData(t *testing.T) {
 			errorExpected: false,
 			errorContains: "",
 		},
+		{
+			description: "App FPD only present",
+			input: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  }
+  				},
+  				"app": {
+  				  "id": "appId",
+  				  "data": {"someappfpd": "appfpdDataTest"},
+  				  "ext": {"data": 123}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			output: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  }
+  				},
+  				"app": {
+  				  "id": "appId",
+  				  "ext": {"data": 123}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			expectedFpdData: map[string][]byte{
+				"app":  []byte(`{"someappfpd": "appfpdDataTest"}`),
+				"user": []byte{},
+				"site": []byte{},
+			},
+			errorExpected: false,
+			errorContains: "",
+		}, {
+			description: "Malformed input",
+			input: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  
+  				  "data": meappfpd": "appfpdDataTest"},
+  				  "ext": {"data": 123}
+  				},
+  				: 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439
+  				}
+			}`),
+			output: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  
+  				  "data": meappfpd": "appfpdDataTest"},
+  				  "ext": {"data": 123}
+  				},
+  				: 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439
+  				}
+			}`),
+			expectedFpdData: map[string][]byte{},
+			errorExpected:   true,
+			errorContains:   "Unknown value type",
+		},
 	}
 	for _, test := range testCases {
 		res, fpd, err := getFPDData(test.input)
 
 		if test.errorExpected {
 			assert.Error(t, err, "Error should not be nil")
+			//result should be still returned
+			assert.Equal(t, test.output, res, "Result is incorrect")
 			assert.True(t, strings.Contains(err.Error(), test.errorContains))
 		} else {
 			assert.NoError(t, err, "Error should be nil")
@@ -2825,11 +2907,123 @@ func TestFindAndDropElement(t *testing.T) {
 			errorExpected: false,
 			errorContains: "",
 		},
+		{
+			description: "Element doesn't exists",
+			input: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  },
+  				  "data": {"somesitefpd": "sitefpdDataTest"}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			dataPath: []string{"site", "test"},
+			output: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  },
+  				  "data": {"somesitefpd": "sitefpdDataTest"}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			foundData:     []byte{},
+			errorExpected: false,
+			errorContains: "",
+		},
+		{
+			description: "Non object element exists",
+			input: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  },
+  				  "data": {"somesitefpd": "sitefpdDataTest"}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			dataPath: []string{"site", "id"},
+			output: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  },
+  				  "data": {"somesitefpd": "sitefpdDataTest"}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			foundData:     []byte(`reqSiteId`),
+			errorExpected: false,
+			errorContains: "",
+		},
+		{
+			description: "Malformed input",
+			input: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  },
+  				  "data":  sitefpdDataTest"}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			dataPath: []string{"site", "data"},
+			output: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  },
+  				  "data":  sitefpdDataTest"}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			foundData:     []byte(nil),
+			errorExpected: true,
+			errorContains: "Unknown value type",
+		},
 	}
 	for _, test := range testCases {
 		res, data, err := findAndDropElement(test.input, test.dataPath...)
+
 		if test.errorExpected {
 			assert.Error(t, err, "Error should not be nil")
+			assert.Equal(t, test.output, res, "Result should be still returned")
 			assert.True(t, strings.Contains(err.Error(), test.errorContains))
 		} else {
 			assert.NoError(t, err, "Error should be nil")
