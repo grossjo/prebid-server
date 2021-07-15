@@ -3,6 +3,7 @@ package jsonutil
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 )
 
@@ -121,7 +122,7 @@ func DropElement(extension []byte, elementNames ...string) ([]byte, error) {
 
 }
 
-func SetElement(data []byte, setValue []byte, keys ...string) ([]byte, error) {
+func SetElement2(data []byte, setValue []byte, keys ...string) ([]byte, error) {
 	// Doesn't support set value in array
 	// Doesn't support creation of nested elements
 	// Can create one nested element if len(keys) == 1 and this element was not found
@@ -190,7 +191,11 @@ func buildNewObject(key string, setValue []byte) []byte {
 	return result
 }
 
-func SetElement2(originDataInput []byte, setValue []byte, key string) ([]byte, error) {
+func SetElement(originDataInput []byte, setValue []byte, keys ...string) ([]byte, error) {
+	if len(keys) != 1 {
+		return originDataInput, errors.New("only one key is now supported")
+	}
+	key := keys[0]
 
 	originData := make(map[string]interface{})
 	setValueData := make(map[string]interface{})

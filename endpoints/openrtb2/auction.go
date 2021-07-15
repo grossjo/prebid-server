@@ -299,56 +299,41 @@ func (deps *endpointDeps) parseRequest(httpRequest *http.Request) (req *openrtb2
 
 func getFPDData(request []byte) ([]byte, map[string][]byte, error) {
 	//If {site,app,user}.data exists, merge it into {site,app,user}.ext.data and remove {site,app,user}.data
-	siteData, _, _, err := jsonparser.Get(request, site, data)
-	if err != nil && err != jsonparser.KeyPathNotFoundError {
+	request, siteFPD, err := findAndDropElement(request, site, data)
+	if err != nil {
 		return request, nil, err
 	}
-	appData, _, _, err := jsonparser.Get(request, app, data)
-	if err != nil && err != jsonparser.KeyPathNotFoundError {
+	request, appFPD, err := findAndDropElement(request, app, data)
+	if err != nil {
 		return request, nil, err
 	}
-
-	userData, _, _, err := jsonparser.Get(request, user, data)
-	if err != nil && err != jsonparser.KeyPathNotFoundError {
+	request, userFPD, err := findAndDropElement(request, user, data)
+	if err != nil {
 		return request, nil, err
 	}
-
 	fpdReqData := make(map[string][]byte, 0)
-	if siteData != nil {
-
-		siteDataCopy := make([]byte, len(siteData))
-		copy(siteDataCopy, siteData)
-		fpdReqData[site] = siteDataCopy
-
-		request, err = jsonutil.DropElement(request, site, data)
-		if err != nil {
-			return request, nil, err
-		}
-	}
-	if appData != nil {
-
-		appDataCopy := make([]byte, len(appData))
-		copy(appDataCopy, appData)
-		fpdReqData[app] = appData
-
-		request, err = jsonutil.DropElement(request, app, data)
-		if err != nil {
-			return request, nil, err
-		}
-	}
-	if userData != nil {
-
-		userDataCopy := make([]byte, len(userData))
-		copy(userDataCopy, userData)
-		fpdReqData[user] = userDataCopy
-
-		request, err = jsonutil.DropElement(request, user, data)
-		if err != nil {
-			return request, nil, err
-		}
-	}
+	fpdReqData[site] = siteFPD
+	fpdReqData[app] = appFPD
+	fpdReqData[user] = userFPD
 
 	return request, fpdReqData, nil
+}
+
+func findAndDropElement(input []byte, elementNames ...string) ([]byte, []byte, error) {
+	element, _, _, err := jsonparser.Get(input, elementNames...)
+	if err != nil && err != jsonparser.KeyPathNotFoundError {
+		return input, nil, err
+	}
+	elementCopy := make([]byte, len(element))
+	if element != nil {
+		copy(elementCopy, element)
+
+		input, err = jsonutil.DropElement(input, elementNames...)
+		if err != nil {
+			return input, nil, err
+		}
+	}
+	return input, elementCopy, nil
 }
 
 // parseTimeout returns parses tmax from the requestJson, or returns the default if it doesn't exist.

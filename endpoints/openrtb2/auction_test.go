@@ -2694,6 +2694,152 @@ func TestValidateNativeAssetData(t *testing.T) {
 	}
 }
 
+func TestGetFPDData(t *testing.T) {
+
+	testCases := []struct {
+		description     string
+		input           []byte
+		output          []byte
+		expectedFpdData map[string][]byte
+		errorExpected   bool
+		errorContains   string
+	}{
+		{
+			description: "Site, app and user data present",
+			input: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  },
+  				  "data": {"somesitefpd": "sitefpdDataTest"}
+  				},
+  				"user": {
+  				  "id": "reqUserID",
+  				  "yob": 1982,
+  				  "gender": "M",
+  				  "data": {"someuserfpd": "userfpdDataTest"}
+  				},
+  				"app": {
+  				  "id": "appId",
+  				  "data": {"someappfpd": "appfpdDataTest"},
+  				  "ext": {"data": 123}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			output: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  }
+  				},
+  				"user": {
+  				  "id": "reqUserID",
+  				  "yob": 1982,
+  				  "gender": "M"
+  				},
+  				"app": {
+  				  "id": "appId",
+  				  "ext": {"data": 123}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			expectedFpdData: map[string][]byte{
+				"site": []byte(`{"somesitefpd": "sitefpdDataTest"}`),
+				"user": []byte(`{"someuserfpd": "userfpdDataTest"}`),
+				"app":  []byte(`{"someappfpd": "appfpdDataTest"}`),
+			},
+			errorExpected: false,
+			errorContains: "",
+		},
+	}
+	for _, test := range testCases {
+		res, fpd, err := getFPDData(test.input)
+
+		if test.errorExpected {
+			assert.Error(t, err, "Error should not be nil")
+			assert.True(t, strings.Contains(err.Error(), test.errorContains))
+		} else {
+			assert.NoError(t, err, "Error should be nil")
+			assert.Equal(t, test.output, res, "Result is incorrect")
+			assert.Equal(t, test.expectedFpdData, fpd, "FPD is incorrect")
+		}
+
+	}
+}
+
+func TestFindAndDropElement(t *testing.T) {
+	testCases := []struct {
+		description   string
+		input         []byte
+		dataPath      []string
+		output        []byte
+		foundData     []byte
+		errorExpected bool
+		errorContains string
+	}{
+		{
+			description: "Element exists",
+			input: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  },
+  				  "data": {"somesitefpd": "sitefpdDataTest"}
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			dataPath: []string{"site", "data"},
+			output: []byte(`{
+  				"id": "bid_id",
+  				"site": {
+  				  "id":"reqSiteId",
+  				  "page": "http://www.foobar.com/1234.html",
+  				  "publisher": {
+  				    "id": "1"
+  				  }
+  				},
+  				"tmax": 5000,
+  				"source": {
+  				  "tid": "ad839de0-5ae6-40bb-92b2-af8bad6439b3"
+  				}
+			}`),
+			foundData:     []byte(`{"somesitefpd": "sitefpdDataTest"}`),
+			errorExpected: false,
+			errorContains: "",
+		},
+	}
+	for _, test := range testCases {
+		res, data, err := findAndDropElement(test.input, test.dataPath...)
+		if test.errorExpected {
+			assert.Error(t, err, "Error should not be nil")
+			assert.True(t, strings.Contains(err.Error(), test.errorContains))
+		} else {
+			assert.NoError(t, err, "Error should be nil")
+			assert.Equal(t, test.output, res, "Result is incorrect")
+			assert.Equal(t, test.foundData, data, "FPD is incorrect")
+		}
+	}
+
+}
+
 // warningsCheckExchange is a well-behaved exchange which stores all incoming warnings.
 type warningsCheckExchange struct {
 	auctionRequest exchange.AuctionRequest
