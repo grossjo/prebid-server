@@ -223,15 +223,3 @@ func TestSetElement(t *testing.T) {
 	}
 
 }
-
-//test for byte array based set element
-func TestSetElementNested(t *testing.T) {
-	input := []byte(`{"consented_providers":{"providers":[1608,765,492], "nested":{"data": 123}}}`)
-	setValue := []byte(`"test":{"nested":true}`)
-	output := []byte(`{"consented_providers":{"providers":[1608,765,492], "nested":{"data": 123,"test":{"nested":true}}}}`)
-
-	res, err := SetElement2(input, setValue, "consented_providers", "nested")
-
-	assert.NoError(t, err, "Error should be nil")
-	assert.Equal(t, output, res, "Result is incorrect")
-}

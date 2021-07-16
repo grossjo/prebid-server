@@ -2804,8 +2804,8 @@ func TestGetFPDData(t *testing.T) {
 			}`),
 			expectedFpdData: map[string][]byte{
 				"app":  []byte(`{"someappfpd": "appfpdDataTest"}`),
-				"user": []byte{},
-				"site": []byte{},
+				"user": {},
+				"site": {},
 			},
 			errorExpected: false,
 			errorContains: "",
@@ -3032,6 +3032,66 @@ func TestFindAndDropElement(t *testing.T) {
 		}
 	}
 
+}
+
+func TestParseRequestFPD(t *testing.T) {
+	deps := &endpointDeps{
+		&warningsCheckExchange{},
+		newParamsValidator(t),
+		&mockStoredReqFetcher{},
+		empty_fetcher.EmptyFetcher{},
+		empty_fetcher.EmptyFetcher{},
+		nil,
+		newTestMetrics(),
+		analyticsConf.NewPBSAnalytics(&config.Analytics{}),
+		map[string]string{},
+		false,
+		[]byte{},
+		openrtb_ext.BuildBidderMap(),
+		nil,
+		nil,
+		hardcodedResponseIPValidator{response: true},
+	}
+
+	expectedFpd := map[string]map[string][]byte{
+		"fpd-site-user.json": {
+			"site": []byte(`{"someSiteFpd": "siteFpdDataTest"}`),
+			"user": []byte(`{"someUserFpd": "userFpdDataTest"}`),
+			"app":  []byte(``),
+		},
+		"fpd-site.json": {
+			"site": []byte(`{"someSiteFpd": "siteFpdDataTest"}`),
+			"user": []byte(``),
+			"app":  []byte(``),
+		},
+		"fpd-app-user.json": {
+			"site": []byte(``),
+			"user": []byte(`{"someUserFpd": "userFpdDataTest"}`),
+			"app":  []byte(`{"someAppFpd": "appFpdDataTest"}`),
+		},
+		"fpd-user.json": {
+			"site": []byte(``),
+			"user": []byte(`{"someUserFpd": "userFpdDataTest"}`),
+			"app":  []byte(``),
+		},
+		"no-fpd.json": {
+			"site": []byte(``),
+			"user": []byte(``),
+			"app":  []byte(``),
+		},
+	}
+
+	if specFiles, err := ioutil.ReadDir("sample-requests/valid-whole/supplementary/firstPartyData"); err == nil {
+		for _, specFile := range specFiles {
+			reqBody := validRequest(t, fmt.Sprintf("firstPartyData/%s", specFile.Name()))
+			deps.cfg = &config.Configuration{MaxRequestSize: int64(len(reqBody))}
+			req := httptest.NewRequest("POST", "/openrtb2/auction", strings.NewReader(reqBody))
+			_, fpData, errL := deps.parseRequest(req)
+
+			assert.Len(t, errL, 0, "No errors expected")
+			assert.Equal(t, expectedFpd[specFile.Name()], fpData, "Request is incorrect")
+		}
+	}
 }
 
 // warningsCheckExchange is a well-behaved exchange which stores all incoming warnings.

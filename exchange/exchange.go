@@ -760,7 +760,7 @@ func mergeSite(site openrtb2.Site, fpdSite *openrtb2.Site, siteData []byte) *ope
 	if siteData != nil {
 		//what function to call: SetElement or SetElement2
 		//newSiteExt, err := jsonutil.SetElement(newSite.Ext, siteData, "data")
-		newSiteExt, err := jsonutil.SetElement2(newSite.Ext, siteData, "data")
+		newSiteExt, err := jsonutil.SetElement(newSite.Ext, siteData, "data")
 
 		if err == nil {
 			newSite.Ext = newSiteExt
