@@ -3034,6 +3034,96 @@ func TestFindAndDropElement(t *testing.T) {
 
 }
 
+func TestValidateFPDConfig(t *testing.T) {
+
+	bidderConfigs := &[]openrtb_ext.FPDBidderConfig{
+		{
+			Bidders: []string{"testBidder1"},
+			FPDConfig: &openrtb_ext.FPDConfig{
+				FPDData: &openrtb_ext.FPDData{
+					Site: &openrtb2.Site{ID: "testBidder1SiteId"},
+				},
+			},
+		},
+	}
+
+	bidderConfigsNoConfigs := &[]openrtb_ext.FPDBidderConfig{
+		{
+			Bidders:   []string{"testBidder1"},
+			FPDConfig: nil,
+		},
+	}
+
+	testCases := []struct {
+		description   string
+		reqExtPrebid  openrtb_ext.ExtRequestPrebid
+		errorExpected bool
+		errorContains string
+	}{
+		{
+			description: "Valid config both present",
+			reqExtPrebid: openrtb_ext.ExtRequestPrebid{
+				Data: &openrtb_ext.ExtRequestPrebidData{
+					Bidders: []string{"testBidder1"},
+				},
+				BidderConfigs: bidderConfigs,
+			},
+			errorExpected: false,
+			errorContains: "",
+		},
+		{
+			description: "Valid config both not present",
+			reqExtPrebid: openrtb_ext.ExtRequestPrebid{
+				Data:          nil,
+				BidderConfigs: nil,
+			},
+			errorExpected: false,
+			errorContains: "",
+		},
+		{
+			description: "Invalid config data nil",
+			reqExtPrebid: openrtb_ext.ExtRequestPrebid{
+				Data:          nil,
+				BidderConfigs: bidderConfigs,
+			},
+			errorExpected: true,
+			errorContains: "request.ext.prebid.data is not specified but reqExtPrebid.BidderConfigs are",
+		},
+		{
+			description: "Invalid config no bidders",
+			reqExtPrebid: openrtb_ext.ExtRequestPrebid{
+				Data: &openrtb_ext.ExtRequestPrebidData{
+					Bidders: []string{"testBidder1"},
+				},
+				BidderConfigs: nil,
+			},
+			errorExpected: true,
+			errorContains: "request.ext.prebid.data.bidders are specified but reqExtPrebid.BidderConfigs are",
+		},
+		{
+			description: "Invalid config no configs",
+			reqExtPrebid: openrtb_ext.ExtRequestPrebid{
+				Data: &openrtb_ext.ExtRequestPrebidData{
+					Bidders: []string{},
+				},
+				BidderConfigs: bidderConfigsNoConfigs,
+			},
+			errorExpected: true,
+			errorContains: "request.ext.prebid.data.bidders are not specified but reqExtPrebid.BidderConfigs are",
+		},
+	}
+	for _, test := range testCases {
+		err := validateFPDConfig(test.reqExtPrebid)
+
+		if test.errorExpected {
+			assert.NotNil(t, err, "error expected")
+			assert.True(t, strings.Contains(err.Error(), test.errorContains))
+		} else {
+			assert.Nil(t, err, "error is not expected")
+		}
+	}
+}
+
 func TestParseRequestFPD(t *testing.T) {
 	deps := &endpointDeps{
 		&warningsCheckExchange{},
@@ -3090,6 +3180,50 @@ func TestParseRequestFPD(t *testing.T) {
 
 			assert.Len(t, errL, 0, "No errors expected")
 			assert.Equal(t, expectedFpd[specFile.Name()], fpData, "Request is incorrect")
+		}
+	}
+}
+
+func TestValidateFPDBidders(t *testing.T) {
+	deps := &endpointDeps{
+		&warningsCheckExchange{},
+		newParamsValidator(t),
+		&mockStoredReqFetcher{},
+		empty_fetcher.EmptyFetcher{},
+		empty_fetcher.EmptyFetcher{},
+		nil,
+		newTestMetrics(),
+		analyticsConf.NewPBSAnalytics(&config.Analytics{}),
+		map[string]string{},
+		false,
+		[]byte{},
+		openrtb_ext.BuildBidderMap(),
+		nil,
+		nil,
+		hardcodedResponseIPValidator{response: true},
+	}
+
+	expectedFpdBiddersValidationErrors := map[string]string{
+		"fpd-bidders-valid.json":                  "",
+		"fpd-bidders-valid-no-fpd.json":           "",
+		"fpd-bidders-invalid-no-global.json":      "[request.ext.prebid.data.bidders are not specified but reqExtPrebid.BidderConfigs are]",
+		"fpd-bidders-invalid-no-bidder-conf.json": "[request.ext.prebid.data.bidders are specified but reqExtPrebid.BidderConfigs are not]",
+	}
+
+	if specFiles, err := ioutil.ReadDir("sample-requests/valid-whole/supplementary/firstPartyDataBidders"); err == nil {
+		for _, specFile := range specFiles {
+			reqBody := validRequest(t, fmt.Sprintf("firstPartyDataBidders/%s", specFile.Name()))
+			deps.cfg = &config.Configuration{MaxRequestSize: int64(len(reqBody))}
+			req := httptest.NewRequest("POST", "/openrtb2/auction", strings.NewReader(reqBody))
+			_, _, errL := deps.parseRequest(req)
+
+			err := expectedFpdBiddersValidationErrors[specFile.Name()]
+			if err == "" {
+				assert.Len(t, errL, 0, "No errors expected after parse request")
+			} else {
+				assert.True(t, strings.Contains(err, errL[0].Error()), "Incorrect error message")
+			}
+
 		}
 	}
 }

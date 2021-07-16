@@ -567,6 +567,10 @@ func validateFPDConfig(reqExtPrebid openrtb_ext.ExtRequestPrebid) error {
 		return errors.New(`request.ext.prebid.data.bidders are not specified but reqExtPrebid.BidderConfigs are`)
 	}
 
+	if reqExtPrebid.Data == nil && reqExtPrebid.BidderConfigs != nil {
+		return errors.New(`request.ext.prebid.data is not specified but reqExtPrebid.BidderConfigs are`)
+	}
+
 	return nil
 }
 
