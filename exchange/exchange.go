@@ -313,23 +313,22 @@ func (e *exchange) HoldAuction(ctx context.Context, r AuctionRequest, debugLog *
 }
 
 func preprocessFPD(reqExtPrebid openrtb_ext.ExtRequestPrebid, rawRequestExt json.RawMessage) (map[openrtb_ext.BidderName]*openrtb_ext.FPDData, json.RawMessage, openrtb_ext.ExtRequestPrebid) {
-
-	if reqExtPrebid.Data == nil || reqExtPrebid.BidderConfigs == nil {
-		return nil, rawRequestExt, reqExtPrebid
-	}
 	//map to store bidder configs to process
 	fpdData := make(map[openrtb_ext.BidderName]*openrtb_ext.FPDData)
 
-	//every entry in ext.prebid.bidderconfig[].bidders would also need to be in ext.prebid.data.bidders or it will be ignored
-	bidderTable := make(map[string]bool) //boolean just  to check existence of the element in map
-	for _, bidder := range reqExtPrebid.Data.Bidders {
-		bidderTable[bidder] = true
-	}
+	if reqExtPrebid.Data != nil && len(reqExtPrebid.Data.Bidders) != 0 && reqExtPrebid.BidderConfigs != nil {
 
-	for _, bidderConfig := range *reqExtPrebid.BidderConfigs {
-		for _, bidder := range bidderConfig.Bidders {
-			if bidderTable[bidder] {
-				fpdData[openrtb_ext.BidderName(bidder)] = bidderConfig.FPDConfig.FPDData
+		//every entry in ext.prebid.bidderconfig[].bidders would also need to be in ext.prebid.data.bidders or it will be ignored
+		bidderTable := make(map[string]bool) //boolean just  to check existence of the element in map
+		for _, bidder := range reqExtPrebid.Data.Bidders {
+			bidderTable[bidder] = true
+		}
+
+		for _, bidderConfig := range *reqExtPrebid.BidderConfigs {
+			for _, bidder := range bidderConfig.Bidders {
+				if bidderTable[bidder] {
+					fpdData[openrtb_ext.BidderName(bidder)] = bidderConfig.FPDConfig.FPDData
+				}
 			}
 		}
 	}
@@ -339,7 +338,9 @@ func preprocessFPD(reqExtPrebid openrtb_ext.ExtRequestPrebid, rawRequestExt json
 	rawRequestExt, _ = jsonutil.DropElement(rawRequestExt, "data")
 
 	reqExtPrebid.BidderConfigs = nil
-	reqExtPrebid.Data.Bidders = nil
+	if reqExtPrebid.Data != nil {
+		reqExtPrebid.Data.Bidders = nil
+	}
 
 	return fpdData, rawRequestExt, reqExtPrebid
 }

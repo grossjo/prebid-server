@@ -3376,6 +3376,93 @@ func TestUpdateHbPbCatDur(t *testing.T) {
 	}
 }
 
+func TestPreprocessFPD(t *testing.T) {
+
+	if specFiles, err := ioutil.ReadDir("./exchangetest/preprocessfpd"); err == nil {
+		for _, specFile := range specFiles {
+			fileName := "./exchangetest/preprocessfpd/" + specFile.Name()
+
+			fpdFile, err := loadFpdFile(fileName)
+			if err != nil {
+				t.Errorf("Unable to load file: %s", fileName)
+			}
+
+			fpdData, reqExt, reqExtPrebid := preprocessFPD(fpdFile.ExtReq, fpdFile.InputRequestExt)
+
+			if reqExtPrebid.Data != nil {
+				assert.Nil(t, reqExtPrebid.Data.Bidders, "Global FPD config should be removed from request")
+			}
+			assert.Nil(t, reqExtPrebid.BidderConfigs, "Bidder specific FPD config should be removed from request")
+
+			assert.Equal(t, fpdFile.OutputRequestExt, reqExt, "Incorrect request extension")
+
+			assert.Equal(t, len(fpdFile.ResultFpd), len(fpdData), "Incorrect fpd data")
+
+			for k, v := range fpdFile.ResultFpd {
+
+				if v.Site != nil {
+					tempSiteExt := fpdData[k].Site.Ext
+					diffJson(t, "site.ext is incorrect", v.Site.Ext, tempSiteExt)
+					//compare extensions first and the site objects without extensions
+					v.Site.Ext = nil
+					fpdData[k].Site.Ext = nil
+					assert.Equal(t, v.Site, fpdData[k].Site, "Incorrect site fpd data")
+					fpdData[k].Site.Ext = tempSiteExt
+				}
+
+				if v.App != nil {
+
+					tempAppExt := fpdData[k].App.Ext
+					diffJson(t, "app.ext is incorrect", v.App.Ext, tempAppExt)
+					//compare extensions first and the app objects without extensions
+					v.App.Ext = nil
+					fpdData[k].App.Ext = nil
+					assert.Equal(t, v.App, fpdData[k].App, "Incorrect app fpd data")
+					fpdData[k].App.Ext = tempAppExt
+				}
+
+				if v.User != nil {
+					tempUserExt := fpdData[k].User.Ext
+					diffJson(t, "user.ext is incorrect", v.User.Ext, tempUserExt)
+					//compare extensions first and the user objects without extensions
+					v.User.Ext = nil
+					fpdData[k].User.Ext = nil
+					assert.Equal(t, v.User, fpdData[k].User, "Incorrect user fpd data")
+					fpdData[k].User.Ext = tempUserExt
+				}
+
+			}
+		}
+	}
+}
+
+func loadFpdFile(filename string) (fpdFile, error) {
+	var fileData fpdFile
+	fileContents, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return fileData, err
+	}
+	err = json.Unmarshal(fileContents, &fileData)
+	if err != nil {
+		return fileData, err
+	}
+
+	var extReq openrtb_ext.ExtRequestPrebid
+	err = json.Unmarshal(fileData.InputRequestExt, &extReq)
+	if err != nil {
+		return fileData, err
+	}
+	fileData.ExtReq = extReq
+	return fileData, nil
+}
+
+type fpdFile struct {
+	InputRequestExt  json.RawMessage                                 `json:"inputRequestExt,omitempty"`
+	OutputRequestExt json.RawMessage                                 `json:"outputRequestExt,omitempty"`
+	ResultFpd        map[openrtb_ext.BidderName]*openrtb_ext.FPDData `json:"resultFpd,omitempty"`
+	ExtReq           openrtb_ext.ExtRequestPrebid                    `json:"extReq,omitempty"`
+}
+
 type exchangeSpec struct {
 	GDPREnabled       bool                   `json:"gdpr_enabled"`
 	IncomingRequest   exchangeRequest        `json:"incomingRequest"`
