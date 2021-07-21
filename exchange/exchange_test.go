@@ -3378,9 +3378,9 @@ func TestUpdateHbPbCatDur(t *testing.T) {
 
 func TestPreprocessFPD(t *testing.T) {
 
-	if specFiles, err := ioutil.ReadDir("./exchangetest/firstpartydata/preprocessfpd"); err == nil {
+	if specFiles, err := ioutil.ReadDir("./firstpartydata/preprocessfpd"); err == nil {
 		for _, specFile := range specFiles {
-			fileName := "./exchangetest/firstpartydata/preprocessfpd/" + specFile.Name()
+			fileName := "./firstpartydata/preprocessfpd/" + specFile.Name()
 
 			fpdFile, err := loadFpdFile(fileName)
 			if err != nil {
@@ -3444,9 +3444,9 @@ func TestPreprocessFPD(t *testing.T) {
 
 func TestApplyFPD(t *testing.T) {
 
-	if specFiles, err := ioutil.ReadDir("./exchangetest/firstpartydata/applyfpd"); err == nil {
+	if specFiles, err := ioutil.ReadDir("./firstpartydata/applyfpd"); err == nil {
 		for _, specFile := range specFiles {
-			fileName := "./exchangetest/firstpartydata/applyfpd/" + specFile.Name()
+			fileName := "./firstpartydata/applyfpd/" + specFile.Name()
 
 			fpdFile, err := loadFpdFile(fileName)
 			if err != nil {
