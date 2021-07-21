@@ -3378,32 +3378,38 @@ func TestUpdateHbPbCatDur(t *testing.T) {
 
 func TestPreprocessFPD(t *testing.T) {
 
-	if specFiles, err := ioutil.ReadDir("./exchangetest/preprocessfpd"); err == nil {
+	if specFiles, err := ioutil.ReadDir("./exchangetest/firstpartydata/preprocessfpd"); err == nil {
 		for _, specFile := range specFiles {
-			fileName := "./exchangetest/preprocessfpd/" + specFile.Name()
+			fileName := "./exchangetest/firstpartydata/preprocessfpd/" + specFile.Name()
 
 			fpdFile, err := loadFpdFile(fileName)
 			if err != nil {
 				t.Errorf("Unable to load file: %s", fileName)
 			}
+			var extReq openrtb_ext.ExtRequestPrebid
+			err = json.Unmarshal(fpdFile.InputRequestData, &extReq)
+			if err != nil {
+				t.Errorf("Unable to unmarshal input request: %s", fileName)
+			}
 
-			fpdData, reqExt, reqExtPrebid := preprocessFPD(fpdFile.ExtReq, fpdFile.InputRequestExt)
+			fpdData, reqExt, reqExtPrebid := preprocessFPD(extReq, fpdFile.InputRequestData)
 
 			if reqExtPrebid.Data != nil {
 				assert.Nil(t, reqExtPrebid.Data.Bidders, "Global FPD config should be removed from request")
 			}
 			assert.Nil(t, reqExtPrebid.BidderConfigs, "Bidder specific FPD config should be removed from request")
 
-			assert.Equal(t, fpdFile.OutputRequestExt, reqExt, "Incorrect request extension")
+			assert.Equal(t, fpdFile.OutputRequestData, reqExt, "Incorrect request extension")
 
-			assert.Equal(t, len(fpdFile.ResultFpd), len(fpdData), "Incorrect fpd data")
+			assert.Equal(t, len(fpdFile.BiddersFPD), len(fpdData), "Incorrect fpd data")
 
-			for k, v := range fpdFile.ResultFpd {
+			for k, v := range fpdFile.BiddersFPD {
 
 				if v.Site != nil {
 					tempSiteExt := fpdData[k].Site.Ext
 					diffJson(t, "site.ext is incorrect", v.Site.Ext, tempSiteExt)
 					//compare extensions first and the site objects without extensions
+					//in case two or more bidders share same config(pointer), ext should be returned back
 					v.Site.Ext = nil
 					fpdData[k].Site.Ext = nil
 					assert.Equal(t, v.Site, fpdData[k].Site, "Incorrect site fpd data")
@@ -3436,6 +3442,75 @@ func TestPreprocessFPD(t *testing.T) {
 	}
 }
 
+func TestApplyFPD(t *testing.T) {
+
+	if specFiles, err := ioutil.ReadDir("./exchangetest/firstpartydata/applyfpd"); err == nil {
+		for _, specFile := range specFiles {
+			fileName := "./exchangetest/firstpartydata/applyfpd/" + specFile.Name()
+
+			fpdFile, err := loadFpdFile(fileName)
+			if err != nil {
+				t.Errorf("Unable to load file: %s", fileName)
+			}
+
+			var inputReq openrtb2.BidRequest
+			err = json.Unmarshal(fpdFile.InputRequestData, &inputReq)
+			if err != nil {
+				t.Errorf("Unable to unmarshal input request: %s", fileName)
+			}
+
+			var inputReqCopy openrtb2.BidRequest
+			err = json.Unmarshal(fpdFile.InputRequestData, &inputReqCopy)
+			if err != nil {
+				t.Errorf("Unable to unmarshal input request: %s", fileName)
+			}
+
+			var outputReq openrtb2.BidRequest
+			err = json.Unmarshal(fpdFile.OutputRequestData, &outputReq)
+			if err != nil {
+				t.Errorf("Unable to unmarshal output request: %s", fileName)
+			}
+			errL := make([]error, 0)
+			fpdData := fpdFile.BiddersFPD["appnexus"]
+
+			d := make(map[string][]byte, 0)
+
+			d["site"] = fpdFile.FirstPartyData["site"]
+			d["app"] = fpdFile.FirstPartyData["app"]
+			d["user"] = fpdFile.FirstPartyData["user"]
+
+			resBidRequest := applyFPD(&inputReq, fpdData, d, errL)
+
+			assert.Len(t, errL, 0, "No errors should be returned")
+			assert.Equal(t, inputReq, inputReqCopy, "Original request should not be modified")
+
+			if resBidRequest.Site != nil && len(resBidRequest.Site.Ext) > 0 {
+				resSiteExt := resBidRequest.Site.Ext
+				expectedSiteExt := outputReq.Site.Ext
+				resBidRequest.Site.Ext = nil
+				outputReq.Site.Ext = nil
+				diffJson(t, "site.ext is incorrect", resSiteExt, expectedSiteExt)
+			}
+			if resBidRequest.App != nil && len(resBidRequest.App.Ext) > 0 {
+				resAppExt := resBidRequest.App.Ext
+				expectedAppExt := outputReq.App.Ext
+				resBidRequest.App.Ext = nil
+				outputReq.App.Ext = nil
+				diffJson(t, "app.ext is incorrect", resAppExt, expectedAppExt)
+			}
+			if resBidRequest.User != nil && len(resBidRequest.User.Ext) > 0 {
+				resUserExt := resBidRequest.User.Ext
+				expectedUserExt := outputReq.User.Ext
+				resBidRequest.User.Ext = nil
+				outputReq.User.Ext = nil
+				diffJson(t, "user.ext is incorrect", resUserExt, expectedUserExt)
+			}
+
+			assert.Equal(t, &outputReq, resBidRequest, "Incorrect result bid request")
+		}
+	}
+}
+
 func loadFpdFile(filename string) (fpdFile, error) {
 	var fileData fpdFile
 	fileContents, err := ioutil.ReadFile(filename)
@@ -3447,20 +3522,14 @@ func loadFpdFile(filename string) (fpdFile, error) {
 		return fileData, err
 	}
 
-	var extReq openrtb_ext.ExtRequestPrebid
-	err = json.Unmarshal(fileData.InputRequestExt, &extReq)
-	if err != nil {
-		return fileData, err
-	}
-	fileData.ExtReq = extReq
 	return fileData, nil
 }
 
 type fpdFile struct {
-	InputRequestExt  json.RawMessage                                 `json:"inputRequestExt,omitempty"`
-	OutputRequestExt json.RawMessage                                 `json:"outputRequestExt,omitempty"`
-	ResultFpd        map[openrtb_ext.BidderName]*openrtb_ext.FPDData `json:"resultFpd,omitempty"`
-	ExtReq           openrtb_ext.ExtRequestPrebid                    `json:"extReq,omitempty"`
+	InputRequestData  json.RawMessage                                 `json:"inputRequestData,omitempty"`
+	OutputRequestData json.RawMessage                                 `json:"outputRequestData,omitempty"`
+	BiddersFPD        map[openrtb_ext.BidderName]*openrtb_ext.FPDData `json:"biddersFPD,omitempty"`
+	FirstPartyData    map[string]json.RawMessage                      `json:"firstPartyData,omitempty"`
 }
 
 type exchangeSpec struct {

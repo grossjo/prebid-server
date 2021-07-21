@@ -1,5 +1,5 @@
 {
-  "inputRequestExt": {
+  "inputRequestData": {
     "cache": {
       "bids": null,
       "vastxml": {
@@ -39,7 +39,7 @@
       ]
     }
   },
-  "outputRequestExt": {
+  "outputRequestData": {
     "cache": {
       "bids": null,
       "vastxml": {
@@ -72,6 +72,6 @@
       "preferdeals": false
     }
   },
-  "resultFpd": {}
+  "biddersFPD": {}
 }
 

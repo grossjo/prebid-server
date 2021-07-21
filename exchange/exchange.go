@@ -32,7 +32,11 @@ import (
 
 type ContextKey string
 
-const DebugContextKey = ContextKey("debugInfo")
+const (
+	DebugContextKey = ContextKey("debugInfo")
+	bidderconfig    = "bidderconfig"
+	data            = "data"
+)
 
 type extCacheInstructions struct {
 	cacheBids, cacheVAST, returnCreative bool
@@ -327,15 +331,32 @@ func preprocessFPD(reqExtPrebid openrtb_ext.ExtRequestPrebid, rawRequestExt json
 		for _, bidderConfig := range *reqExtPrebid.BidderConfigs {
 			for _, bidder := range bidderConfig.Bidders {
 				if bidderTable[bidder] {
-					fpdData[openrtb_ext.BidderName(bidder)] = bidderConfig.FPDConfig.FPDData
+
+					if fpdData[openrtb_ext.BidderName(bidder)] == nil {
+						fpdData[openrtb_ext.BidderName(bidder)] = bidderConfig.FPDConfig.FPDData
+					} else {
+						//this will overwrite previously set site/app/user.
+						//Last defined bidder-specific config will take precedence
+						//Do we need to check it?
+						fpdBidderData := fpdData[openrtb_ext.BidderName(bidder)]
+						if bidderConfig.FPDConfig.FPDData.Site != nil {
+							fpdBidderData.Site = bidderConfig.FPDConfig.FPDData.Site
+						}
+						if bidderConfig.FPDConfig.FPDData.App != nil {
+							fpdBidderData.App = bidderConfig.FPDConfig.FPDData.App
+						}
+						if bidderConfig.FPDConfig.FPDData.User != nil {
+							fpdBidderData.User = bidderConfig.FPDConfig.FPDData.User
+						}
+					}
 				}
 			}
 		}
 	}
 
 	//remove FPD data from request and from request extension
-	rawRequestExt, _ = jsonutil.DropElement(rawRequestExt, "bidderconfig")
-	rawRequestExt, _ = jsonutil.DropElement(rawRequestExt, "data")
+	rawRequestExt, _ = jsonutil.DropElement(rawRequestExt, bidderconfig)
+	rawRequestExt, _ = jsonutil.DropElement(rawRequestExt, data)
 
 	reqExtPrebid.BidderConfigs = nil
 	if reqExtPrebid.Data != nil {
@@ -556,7 +577,8 @@ func (e *exchange) getAllBids(
 }
 
 func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData, firstPartyData map[string][]byte, errL []error) *openrtb2.BidRequest {
-	newBidRequest := &bidRequest
+	//copy original request
+	newBidRequest := *bidRequest
 
 	// TODO: If an attribute doesn't pass defined validation checks,
 	// it should be removed from the request with a warning placed
@@ -565,31 +587,31 @@ func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData, fir
 
 	if fpdData.User != nil {
 		if bidRequest.User == nil {
-			(*newBidRequest).User = fpdData.User
+			newBidRequest.User = fpdData.User
 		} else {
-			(*newBidRequest).User = mergeUser(*bidRequest.User, fpdData.User, firstPartyData["user"])
+			newBidRequest.User = mergeUser(*bidRequest.User, fpdData.User, firstPartyData["user"])
 		}
 	}
 
 	if fpdData.App != nil {
 		if bidRequest.App == nil {
-			(*newBidRequest).App = fpdData.App
+			newBidRequest.App = fpdData.App
 		} else {
-			(*newBidRequest).App = mergeApp(*bidRequest.App, fpdData.App, firstPartyData["app"])
+			newBidRequest.App = mergeApp(*bidRequest.App, fpdData.App, firstPartyData["app"])
 		}
 	}
 
 	if fpdData.Site != nil {
 		if bidRequest.Site == nil {
-			(*newBidRequest).Site = fpdData.Site
+			newBidRequest.Site = fpdData.Site
 		} else {
-			(*newBidRequest).Site = mergeSite(*bidRequest.Site, fpdData.Site, firstPartyData["site"])
+			newBidRequest.Site = mergeSite(*bidRequest.Site, fpdData.Site, firstPartyData["site"])
 		}
 	}
 
-	if ((*newBidRequest).Site == nil && (*newBidRequest).App == nil) || ((*newBidRequest).Site != nil && (*newBidRequest).App != nil) {
-		errL = append(errL, errors.New("request.site or request.app must be defined, but not both."))
-	}
+	//if ((*newBidRequest).Site == nil && (*newBidRequest).App == nil) || ((*newBidRequest).Site != nil && (*newBidRequest).App != nil) {
+	//	errL = append(errL, errors.New("request.site or request.app must be defined, but not both."))
+	//}
 
 	/*if err := deps.validateSite(req.Site); err != nil {
 		errL = append(errL, err)
@@ -603,7 +625,7 @@ func applyFPD(bidRequest *openrtb2.BidRequest, fpdData *openrtb_ext.FPDData, fir
 		errL = append(errL, err)
 	}*/
 
-	return *newBidRequest
+	return &newBidRequest
 }
 
 func mergeUser(user openrtb2.User, fpdUser *openrtb2.User, userData []byte) *openrtb2.User {

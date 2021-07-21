@@ -1,5 +1,5 @@
 {
-  "inputRequestExt": {
+  "inputRequestData": {
     "cache": {
       "bids": null,
       "vastxml": {
@@ -35,7 +35,8 @@
       "bidders": [
         "appnexus",
         "telaria",
-        "testBidder"
+        "testBidder",
+        "testBidder3"
       ]
     },
     "bidderconfig": [
@@ -63,7 +64,8 @@
       {
         "bidders": [
           "telaria",
-          "testBidder2"
+          "testBidder2",
+          "testBidder3"
         ],
         "config": {
           "fpd": {
@@ -88,7 +90,7 @@
       }
     ]
   },
-  "outputRequestExt": {
+  "outputRequestData": {
     "cache": {
       "bids": null,
       "vastxml": {
@@ -121,7 +123,7 @@
       "preferdeals": false
     }
   },
-  "resultFpd": {
+  "biddersFPD": {
     "appnexus": {
       "site": {
         "id": "apnSiteId",
@@ -137,6 +139,24 @@
       }
     },
     "telaria": {
+      "user": {
+        "id": "telariaUserData",
+        "ext": {
+          "data": {
+            "userdata": "fpduserdata"
+          }
+        }
+      },
+      "app": {
+        "id": "telariaAppData",
+        "ext": {
+          "data": {
+            "appdata": "fpdappdata"
+          }
+        }
+      }
+    },
+    "testBidder3": {
       "user": {
         "id": "telariaUserData",
         "ext": {
